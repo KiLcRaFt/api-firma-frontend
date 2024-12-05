@@ -56,7 +56,7 @@ const AddWorkHourForm = ({ employees, onWorkHourAdded }) => {
                             <option value="">Valige töötaja</option>
                             {employees.map((employee) => (
                                 <option key={employee.id} value={employee.id}>
-                                    {employee.name}
+                                    {employee.nimi + " " + employee.perenimi}
                                 </option>
                             ))}
                         </select>

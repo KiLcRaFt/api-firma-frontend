@@ -48,19 +48,97 @@ const AdminPanel = ({ onLogout }) => {
     }, []);
 
     const generateReport = () => {
-        // Пример простого отчёта: список сотрудников
-        const reportContent = employees
-            .map((emp) => `${emp.nimi} ${emp.perenimi} - ${emp.telefoni_number} - ${emp.email} - ${emp.amet}`)
-            .join('\n');
+        if (!employees.length || !workHours.length) {
+            alert("Andmed aruande koostamiseks puuduvad.");
+            return;
+        }
 
-        const blob = new Blob([reportContent], {type: 'text/plain;charset=utf-8'});
+        const employeeHours = employees.map((emp) => {
+            // Praeguse töötaja töötundide filtreerimine
+            const empRecords = workHours.filter((record) => record.tootajaId === emp.id);
+
+            if (!empRecords.length) {
+                console.warn(`Töötaja töötatud tundide arvestuse puudumine: ${emp.nimi} ${emp.perenimi}`);
+            }
+
+            // Koguaja arvutamine
+            const totalHours = empRecords.reduce((sum, record) => {
+                const startTime = new Date(`1970-01-01T${record.tooAlgus}`);
+                const endTime = new Date(`1970-01-01T${record.tooLypp}`);
+                const hoursWorked = (endTime - startTime) / (1000 * 60 * 60);
+                return sum + hoursWorked;
+            }, 0);
+
+            return {
+                ...emp,
+                totalHours,
+            };
+        });
+
+        const reportContent = employeeHours
+            .map((emp) =>
+                `${emp.nimi} ${emp.perenimi} - ${emp.telefoni_number} - ${emp.email} - ${emp.amet} - Tundide arv kokku: ${emp.totalHours.toFixed(2)}`
+            )
+            .join("\n");
+
+        const blob = new Blob([reportContent], { type: "text/plain;charset=utf-8" });
         const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
+        const link = document.createElement("a");
         link.href = url;
-        link.download = 'TootajateAruanne.txt';
+        link.download = "TootajateAruanne.txt";
         link.click();
         URL.revokeObjectURL(url);
     };
+
+
+
+    const generateDetailedReport = () => {
+        if (!employees.length || !workHours.length) {
+            alert("Andmed aruande koostamiseks puuduvad.");
+            return;
+        }
+
+        const reportContent = employees
+            .map((emp) => {
+                // Praeguse töötaja töötundide andmete väljavõtmine
+                const empRecords = workHours.filter((record) => record.tootajaId === emp.id);
+
+                // Töötundide rühmitamine kuupäeva järgi
+                const dailyHours = empRecords.reduce((acc, record) => {
+                    const date = record.kuupaev;
+                    const startTime = new Date(`1970-01-01T${record.tooAlgus}`);
+                    const endTime = new Date(`1970-01-01T${record.tooLypp}`);
+                    const hoursWorked = (endTime - startTime) / (1000 * 60 * 60);
+
+                    if (!acc[date]) {
+                        acc[date] = 0;
+                    }
+                    acc[date] += hoursWorked;
+
+                    return acc;
+                }, {});
+
+                // Ridade vormindamine päevaste tundide jaoks
+                const dailyHoursFormatted = Object.entries(dailyHours)
+                    .map(([date, hours]) => `  ${date}: ${hours.toFixed(2)} tundi`)
+                    .join('\n');
+
+                // Koguaeg
+                const totalHours = Object.values(dailyHours).reduce((sum, hours) => sum + hours, 0);
+
+                return `${emp.nimi} ${emp.perenimi} - ${emp.telefoni_number} - ${emp.email} - ${emp.amet}\nTundide arv kokku: ${totalHours.toFixed(2)}\nKuupäevad:\n${dailyHoursFormatted}`;
+            })
+            .join('\n\n');
+
+        const blob = new Blob([reportContent], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'DetaalneTootajateAruanne.txt';
+        link.click();
+        URL.revokeObjectURL(url);
+    };
+
 
     const handleLogout = () => {
         localStorage.removeItem("userId");
@@ -113,6 +191,12 @@ const AdminPanel = ({ onLogout }) => {
                                 className="py-2 px-4 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-all duration-300 mr-4"
                             >
                                 Aruande koostamine
+                            </button>
+                            <button
+                                onClick={generateDetailedReport}
+                                className="py-2 px-4 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-all duration-300 mr-4"
+                            >
+                                Detaalne aruande koostamine
                             </button>
                         </div>
 
