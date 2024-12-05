@@ -21,24 +21,26 @@ const App = () => {
     return (
         <Router>
             <Routes>
-                <Route path="/" element={<LoginPage />} />
-
+                <Route
+                    path="/"
+                    element={<LoginPage onLogin={(isAdmin, userId) => {
+                        setIsLoggedIn(true);
+                        setUserRole(isAdmin ? "admin" : "worker");
+                    }} />}
+                />
                 <Route
                     path="/admin"
-                    element={
-                        isLoggedIn && userRole === "admin" ? (
-                            <AdminPage />
-                        ) : (
-                            <Navigate to="/" />
-                        )
-                    }
+                    element={isLoggedIn && userRole === "admin" ? <AdminPage /> : <Navigate to="/" />}
                 />
-
                 <Route
                     path="/worker"
+                    element={isLoggedIn && userRole === "worker" ? <WorkerPage /> : <Navigate to="/" />}
+                />
+                <Route
+                    path="/dashboard"
                     element={
-                        isLoggedIn && userRole === "worker" ? (
-                            <WorkerPage />
+                        isLoggedIn ? (
+                            userRole === "admin" ? <Navigate to="/admin" /> : <Navigate to="/worker" />
                         ) : (
                             <Navigate to="/" />
                         )

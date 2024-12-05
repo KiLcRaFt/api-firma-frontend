@@ -11,20 +11,24 @@ const TootajaPage = ({ onLogout }) => {
     useEffect(() => {
         const fetchData = async () => {
             try {
+                const userId = localStorage.getItem("userId");
+                if (!userId) {
+                    setError("Kasutaja ei ole volitatud.");
+                    return;
+                }
+
                 const profileResponse = await axios.get('http://localhost:5095/tootaja/andmed', {
-                    headers: { UserId: localStorage.getItem("userId") },
+                    headers: { UserId: userId },
                 });
-                console.log('profileResponse:', profileResponse.data); // Вывод данных профиля
                 setProfileData(profileResponse.data);
 
                 const workHoursResponse = await axios.get('http://localhost:5095/tootaja/tooaeg', {
-                    headers: { UserId: localStorage.getItem("userId") },
+                    headers: { UserId: userId },
                 });
-                console.log('workHoursResponse:', workHoursResponse.data); // Вывод данных рабочих часов
-                setWorkHours(workHoursResponse.data?.$values || []); // Пытаемся получить рабочие часы
+                setWorkHours(Array.isArray(workHoursResponse.data?.$values) ? workHoursResponse.data.$values : []);
             } catch (err) {
-                console.error("Ошибка загрузки данных:", err);
-                setError(err.message);
+                console.error("Andmete laadimisviga:", err.response?.data || err.message);
+                setError(err.response?.data?.message || "Andmete laadimisviga");
             } finally {
                 setLoading(false);
             }
@@ -33,112 +37,103 @@ const TootajaPage = ({ onLogout }) => {
         fetchData();
     }, []);
 
-
     const addWorkHours = async (kuupaev, tooAlgus, tooLypp) => {
         try {
             const userId = localStorage.getItem("userId");
+            if (!userId) throw new Error("Kasutaja ei ole volitatud.");
 
-            // Убедитесь, что время не пустое
-            if (!tooAlgus || !tooLypp) {
-                throw new Error("Необходимо указать время начала и окончания работы.");
-            }
+            if (!tooAlgus || !tooLypp) throw new Error("Sisestage algus- ja lõpuaeg.");
 
-            // Преобразуем время в строку формата hh:mm:ss, если оно в формате hh:mm
-            const formattedTooAlgus = tooAlgus.length === 5 ? tooAlgus + ':00' : tooAlgus; // Пример: "04:23" -> "04:23:00"
-            const formattedTooLypp = tooLypp.length === 5 ? tooLypp + ':00' : tooLypp;   // Пример: "11:27" -> "11:27:00"
-
-            // Оборачиваем данные в объект TooAeg_Andmed
-            const requestData = {
-                kuupaev,                  // Дата в формате ISO 8601, например "2024-12-05"
-                TooAlgus: formattedTooAlgus,   // Время начала работы
-                TooLypp: formattedTooLypp      // Время окончания работы
-            };
-
-            // Отправляем запрос на сервер
-            const response = await axios.post('http://localhost:5095/tootaja/tooaeg_lisamine', requestData, {
-                headers: { UserId: userId },
-            });
-
-            console.log('Рабочие часы добавлены:', response.data);
-
-            // Перезагружаем рабочие часы
-            const updatedWorkHoursResponse = await axios.get('http://localhost:5095/tootaja/tooaeg', {
-                headers: { UserId: userId },
-            });
-
-            setWorkHours(updatedWorkHoursResponse.data.$values || []); // Обновляем состояние с новыми рабочими часами
+            const requestData = { kuupaev, TooAlgus: `${tooAlgus}:00`, TooLypp: `${tooLypp}:00` };
+            await axios.post('http://localhost:5095/tootaja/tooaeg_lisamine', requestData, { headers: { UserId: userId } });
+            await refreshWorkHours();
         } catch (err) {
-            setError(err.message || "Не удалось добавить рабочие часы");
-            console.error("Ошибка при добавлении рабочих часов:", err);
+            setError(err.message || "Ошибка добавления рабочих часов.");
         }
     };
 
     const updateWorkHours = async (id, kuupaev, tooAlgus, tooLypp) => {
         try {
             const userId = localStorage.getItem("userId");
+            if (!userId) throw new Error("Пользователь не авторизован.");
 
-            // Убедитесь, что время не пустое
-            if (!tooAlgus || !tooLypp) {
-                throw new Error("Необходимо указать время начала и окончания работы.");
-            }
+            if (!tooAlgus || !tooLypp) throw new Error("Введите время начала и окончания.");
 
-            // Преобразуем время в строку формата hh:mm:ss
-            const formattedTooAlgus = tooAlgus.length === 5 ? tooAlgus + ':00' : tooAlgus;
-            const formattedTooLypp = tooLypp.length === 5 ? tooLypp + ':00' : tooLypp;
-
-            // Оборачиваем данные в объект TooAeg_Andmed
             const requestData = {
-                kuupaev,
-                TooAlgus: formattedTooAlgus,
-                TooLypp: formattedTooLypp
+                Kuupaev: kuupaev,
+                TooAlgus: `${tooAlgus}:00`,
+                TooLypp: `${tooLypp}:00`
             };
 
-            // Отправляем запрос на сервер для обновления рабочего времени
-            const response = await axios.put(`http://localhost:5095/tootaja/tooaeg_muudamine?tooaegaId=${id}`, requestData, {
-                headers: { UserId: userId },
-            });
+            const response = await axios.put(
+                `http://localhost:5095/tootaja/tooaeg_muudamine?tooaegaId=${id}`,
+                requestData,
+                { headers: { UserId: userId } }
+            );
 
-            console.log('Рабочие часы обновлены:', response.data);
-
-            // Перезагружаем рабочие часы
-            const updatedWorkHoursResponse = await axios.get('http://localhost:5095/tootaja/tooaeg', {
-                headers: { UserId: userId },
-            });
-
-            setWorkHours(updatedWorkHoursResponse.data.$values || []); // Обновляем состояние с новыми рабочими часами
+            if (response.status === 200) {
+                console.log('Tööaeg on edukalt ajakohastatud');
+                await refreshWorkHours();
+            }
         } catch (err) {
-            setError(err.message || "Не удалось обновить рабочие часы");
-            console.error("Ошибка при обновлении рабочих часов:", err);
+            console.error("Viga tööaja ajakohastamisel", err);
+            setError(err.message || "Viga tööaja ajakohastamisel.");
         }
     };
 
     const deleteWorkHours = async (id) => {
         try {
             const userId = localStorage.getItem("userId");
-            await axios.delete(`http://localhost:5095/tootaja/tooaeg_kustutamine?tooaegaId=${id}`, {
+            if (!userId) throw new Error("Kasutaja ei ole volitatud.");
+
+            await axios.delete(`http://localhost:5095/Tootaja/tooaeg_kustutamine?tooaegaId=${id}`, {
                 headers: { UserId: userId },
             });
 
-            // Перезагружаем рабочие часы после удаления
-            const updatedWorkHoursResponse = await axios.get('http://localhost:5095/tootaja/tooaeg', {
-                headers: { UserId: userId },
-            });
-            setWorkHours(updatedWorkHoursResponse.data.$values || []);
+            await refreshWorkHours();
         } catch (err) {
-            setError(err.message || "Не удалось удалить рабочие часы");
+            setError(err.message || "Viga töötundide kustutamisel.");
         }
     };
 
+    const refreshWorkHours = async () => {
+        try {
+            const userId = localStorage.getItem("userId");
+            const response = await axios.get('http://localhost:5095/tootaja/tooaeg', { headers: { UserId: userId } });
+            setWorkHours(Array.isArray(response.data?.$values) ? response.data.$values : []);
+        } catch (err) {
+            setError("Andmete uuendamise viga.");
+        }
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem("userId");
+        onLogout();
+    };
+
     return (
-        <div>
+        <div className="min-h-screen bg-gray-100 p-6 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
             {loading ? (
-                <p>Загрузка...</p>
+                <p className="text-center text-gray-600">Laadimine...</p>
             ) : error ? (
-                <p>Ошибка: {error}</p>
+                <p className="text-center text-red-500">Viga: {error}</p>
             ) : (
-                <div>
-                    <h1>Профиль</h1>
-                    <pre>{JSON.stringify(profileData, null, 2)}</pre>
+                <div className="bg-white rounded-lg shadow-lg p-6 space-y-6">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-2xl font-semibold text-gray-800">Töötaja Profiil</h2>
+                        <button
+                            onClick={handleLogout}
+                            className="bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 transition"
+                        >
+                            Logi välja
+                        </button>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="flex justify-between">
+                            <span className="font-medium text-lg text-gray-600">Email: {profileData?.email}</span>
+                        </div>
+                    </div>
 
                     <TooAeg
                         workHours={workHours}
